@@ -1,0 +1,135 @@
+# ========================================
+# Python
+# ========================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# ========================================
+# 虚拟环境
+# ========================================
+venv/
+env/
+ENV/
+miniconda3/
+Miniconda3-latest-Linux-x86_64.sh
+
+# ========================================
+# IDE / 编辑器
+# ========================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ========================================
+# 机器学习 / 深度学习 - ⚠️ 关键排除项
+# ========================================
+# 训练检查点（最大占用！）- 全局排除所有模型文件
+*.pt
+*.pth
+*.ckpt
+experiments/checkpoints/
+experiments/*/checkpoints/
+experiments/*/*/checkpoints/
+experiments/*/*/*/checkpoints/
+
+# TensorBoard 日志
+experiments/tensorboard/
+experiments/*/tensorboard/
+experiments/logs/*.tfevents.*
+tensorboard_logs/
+
+# 训练输出视频
+experiments/videos/
+experiments/*/videos/
+*.mp4
+*.avi
+
+# 训练数据和数据集（过大）
+data/demonstrations/*.pkl
+data/demonstrations/*.hdf5
+data/demonstrations/*.npz
+data/demonstrations/
+data/real_world/
+*.bag
+*.mcap
+
+# ========================================
+# Isaac Lab / Simulation
+# ========================================
+_isaac_sim/
+.isaac_sim/
+logs/
+*.log
+
+# USD 缓存文件
+*.usd
+*.usda
+*.usdc
+data/assets/*.usd
+
+# URDF/MJCF 转换输出
+rosorin_ws/build/
+rosorin_ws/install/
+rosorin_ws/log/
+
+# ========================================
+# ROS
+# ========================================
+rosorin_ws/build/
+rosorin_ws/install/
+rosorin_ws/log/
+
+# ========================================
+# 系统文件
+# ========================================
+*.pyc
+*.pyo
+*.tmp
+*.bak
+*~
+.cache/
+.pytest_cache/
+
+# ========================================
+# 大文件 / 临时文件
+# ========================================
+figures/*.png
+figures/*.pdf
+.ipynb_checkpoints/
+tmp/
+temp/
+*.tmp
+
+# ========================================
+# 特殊排除
+# ========================================
+ROSOrin智能视觉小车/
+
+# ========================================
+# 保留结构但排除大文件
+# ========================================
+# 保留 CSV 日志（小文件），排除检查点
+!experiments/**/metrics.csv
+!experiments/**/episodes.csv
+!experiments/**/config.yaml

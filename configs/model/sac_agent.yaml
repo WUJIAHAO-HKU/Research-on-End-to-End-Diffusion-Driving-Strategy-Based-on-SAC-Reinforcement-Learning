@@ -1,0 +1,240 @@
+# ==============================================
+# SAC Agent Configuration
+# ==============================================
+
+agent:
+  name: "SAC_DiffusionActor"
+  algorithm: "sac"
+  
+  # Actor Network (Diffusion Policy)
+  actor:
+    type: "diffusion"  # diffusion, gaussian, deterministic
+    
+    # Use diffusion policy as actor
+    diffusion_config: "configs/model/diffusion_policy.yaml"
+    
+    # Actor-specific settings
+    learning_rate: 3.0e-4
+    
+    # Exploration during training
+    exploration:
+      initial_random_steps: 10000  # Pure random actions at start
+      epsilon_greedy: false  # Not applicable for diffusion
+  
+  # Critic Networks (Q-functions)
+  critic:
+    # Twin Q-networks (standard SAC)
+    num_critics: 2
+    
+    # Architecture
+    architecture:
+      # Observation encoder (shared with actor or separate)
+      shared_encoder: false  # If true, share encoder with actor
+      
+      # Q-network specific encoder
+      encoder:
+        vision:
+          type: "resnet"
+          backbone: "resnet18"
+          pretrained: true
+          feature_dim: 512
+        
+        lidar:
+          type: "pointnet"
+          feature_dim: 256
+        
+        proprio:
+          hidden_dims: [128, 256]
+          output_dim: 256
+      
+      # Q-value head
+      q_head:
+        # Input: fused_obs_dim + action_dim
+        hidden_dims: [512, 512, 256]
+        activation: "relu"
+        use_layer_norm: true
+        output_dim: 1  # Single Q-value
+    
+    # Training
+    learning_rate: 3.0e-4
+    weight_decay: 1.0e-5
+    
+    # Soft update
+    tau: 0.005  # Target network soft update coefficient
+  
+  # Entropy Temperature
+  entropy:
+    # Automatic entropy tuning
+    auto_tune: true
+    initial_alpha: 0.2
+    
+    # If auto_tune = true
+    target_entropy: "auto"  # auto = -action_dim, or specify a value
+    alpha_learning_rate: 3.0e-4
+    
+    # If auto_tune = false
+    fixed_alpha: 0.2
+  
+  # Training Configuration
+  training:
+    # Replay buffer
+    buffer_size: 1000000
+    
+    # Sampling
+    batch_size: 256
+    
+    # Update frequency
+    updates_per_step: 1  # Gradient updates per env step
+    actor_update_frequency: 2  # Update actor every N critic updates
+    
+    # Target network update
+    target_update_frequency: 1  # Update target every N steps
+    
+    # Gradient clipping
+    gradient_clip_val: 1.0
+    
+    # Learning starts
+    learning_starts: 10000  # Start learning after N steps
+    
+    # Discount factor
+    gamma: 0.99
+    
+    # Multi-step returns (optional)
+    n_step: 1  # 1 = standard TD, >1 = n-step TD
+    
+    # Prioritized replay (optional)
+    use_prioritized_replay: false
+    priority_alpha: 0.6
+    priority_beta_start: 0.4
+    priority_beta_end: 1.0
+    priority_beta_frames: 100000
+  
+  # Diffusion-SAC Specific
+  diffusion_sac:
+    # How to compute log_prob for diffusion policy
+    log_prob_method: "analytic"  # analytic, montecarlo
+    
+    # Monte Carlo estimation
+    montecarlo_samples: 10  # If using MC estimation
+    
+    # Action noise for exploration (during training)
+    action_noise:
+      enabled: true
+      type: "gaussian"  # gaussian, ou_noise
+      std: 0.1
+      
+      # Decay schedule
+      noise_decay: true
+      final_std: 0.01
+      decay_steps: 100000
+    
+    # Consistency regularization
+    consistency_loss:
+      enabled: true
+      weight: 0.1
+      # Encourage similar actions for similar observations
+  
+  # Multi-GPU Training
+  distributed:
+    enabled: false
+    backend: "nccl"  # nccl, gloo
+    world_size: 1
+    rank: 0
+  
+  # Mixed Precision
+  use_amp: true
+  
+  # Checkpointing
+  checkpoint:
+    save_interval: 10000  # Save every N steps
+    keep_checkpoints: 5
+    save_optimizer_state: true
+
+# Evaluation during training
+evaluation:
+  enabled: true
+  interval: 10000  # Evaluate every N training steps
+  num_episodes: 10
+  
+  # Deterministic policy during eval
+  deterministic: true
+  
+  # Save evaluation videos
+  save_video: true
+  video_interval: 50000
+
+# Logging
+logging:
+  # Console logging
+  log_interval: 100  # Log every N steps
+  
+  # TensorBoard
+  tensorboard:
+    enabled: true
+    log_dir: "experiments/tensorboard"
+  
+  # Weights & Biases
+  wandb:
+    enabled: false
+    project: "sac-diffusion-driving"
+    entity: null  # Your wandb username
+    tags: ["sac", "diffusion", "autonomous-driving"]
+    
+    # Log gradients
+    log_gradients: true
+    log_frequency: 100
+  
+  # What to log
+  metrics:
+    - "train/q_loss"
+    - "train/actor_loss"
+    - "train/alpha_loss"
+    - "train/alpha_value"
+    - "train/q1_value"
+    - "train/q2_value"
+    - "train/episode_reward"
+    - "train/episode_length"
+    - "eval/mean_reward"
+    - "eval/success_rate"
+    - "eval/collision_rate"
+
+# Curriculum Learning (optional)
+curriculum:
+  enabled: false
+  
+  stages:
+    - name: "easy"
+      max_steps: 100000
+      env_config:
+        scene:
+          path:
+            complexity: "easy"
+          obstacles:
+            static:
+              num: [3, 8]
+            dynamic:
+              num: [0, 1]
+    
+    - name: "medium"
+      max_steps: 200000
+      env_config:
+        scene:
+          path:
+            complexity: "medium"
+          obstacles:
+            static:
+              num: [8, 15]
+            dynamic:
+              num: [1, 2]
+    
+    - name: "hard"
+      max_steps: -1  # Train until convergence
+      env_config:
+        scene:
+          path:
+            complexity: "hard"
+          obstacles:
+            static:
+              num: [10, 20]
+            dynamic:
+              num: [2, 4]

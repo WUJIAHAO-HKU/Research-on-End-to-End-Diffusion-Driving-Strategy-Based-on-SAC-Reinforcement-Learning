@@ -1,0 +1,408 @@
+"""
+ROSOrin Environment Configuration for Isaac Lab
+
+This module defines the scene, robot, sensors, and task configuration
+for the ROSOrin mecanum wheel robot driving environment.
+
+NOTE: This file should only be imported AFTER AppLauncher has been instantiated.
+"""
+
+import math
+import torch
+from typing import Literal
+
+# Isaac Lab imports (must be after AppLauncher)
+import isaaclab.sim as sim_utils
+from isaaclab.actuators import ImplicitActuatorCfg
+from isaaclab.assets import ArticulationCfg, AssetBaseCfg
+from isaaclab.envs import ManagerBasedRLEnvCfg
+from isaaclab.managers import EventTermCfg as EventTerm
+from isaaclab.managers import ObservationGroupCfg as ObsGroup
+from isaaclab.managers import ObservationTermCfg as ObsTerm
+from isaaclab.managers import RewardTermCfg as RewTerm
+from isaaclab.managers import SceneEntityCfg
+from isaaclab.managers import TerminationTermCfg as DoneTerm
+from isaaclab.scene import InteractiveSceneCfg
+from isaaclab.sensors import CameraCfg, RayCasterCfg, ContactSensorCfg, patterns
+from isaaclab.utils import configclass
+from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
+from isaaclab.utils.noise import GaussianNoiseCfg
+
+# MDP functions
+import isaaclab.envs.mdp as mdp
+
+# Custom MDP functions for ROSOrin navigation
+import rosorin_mdp
+
+##
+# Scene Configuration
+##
+
+@configclass
+class ROSOrinSceneCfg(InteractiveSceneCfg):
+    """Configuration for ROSOrin driving scene."""
+
+    # Ground plane - 使用简单的spawner创建平面
+    ground = AssetBaseCfg(
+        prim_path="/World/ground",
+        spawn=sim_utils.CuboidCfg(
+            size=(100.0, 100.0, 0.1),
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(
+                kinematic_enabled=True,  # 地面保持静止
+            ),
+            collision_props=sim_utils.CollisionPropertiesCfg(),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.5, 0.5, 0.5)),
+            physics_material=sim_utils.RigidBodyMaterialCfg(
+                static_friction=1.0,   # 高静摩擦力
+                dynamic_friction=1.0,  # 高动摩擦力
+                restitution=0.0,       # 无弹性
+            ),
+        ),
+        init_state=AssetBaseCfg.InitialStateCfg(pos=(0.0, 0.0, -0.05)),
+    )
+
+    # ROSOrin robot (mecanum wheel robot)
+    robot: ArticulationCfg = ArticulationCfg(
+        prim_path="{ENV_REGEX_NS}/Robot",  # Spawn位置
+        spawn=sim_utils.UsdFileCfg(
+            usd_path="/home/wujiahao/ROSORIN_CAR and Reasearch/Research on End-to-End Diffusion Driving Strategy Based on SAC Reinforcement Learning/data/assets/rosorin/rosorin.usd",
+            activate_contact_sensors=True,
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(
+                disable_gravity=False,
+                retain_accelerations=False,
+                linear_damping=0.0,
+                angular_damping=0.0,
+                max_linear_velocity=2.0,
+                max_angular_velocity=4.0,
+                max_depenetration_velocity=1.0,
+            ),
+            articulation_props=sim_utils.ArticulationRootPropertiesCfg(
+                enabled_self_collisions=False,
+                solver_position_iteration_count=4,
+                solver_velocity_iteration_count=1,
+            ),
+        ),
+        init_state=ArticulationCfg.InitialStateCfg(
+            pos=(0.0, 0.0, 0.10),  # 高度设置
+            rot=(1.0, 0.0, 0.0, 0.0),
+            joint_pos={".*wheel.*": 0.0},
+            joint_vel={".*wheel.*": 0.0},
+        ),
+        actuators={
+            "wheels": ImplicitActuatorCfg(
+                joint_names_expr=[".*wheel.*"],
+                effort_limit=50.0,
+                velocity_limit=20.0,
+                stiffness=0.0,  # 速度控制不需要stiffness
+                damping=1e3,    # 高阻尼用于velocity tracking (原来是10.0太小)
+            ),
+        },
+    )
+
+    # RGB-D Camera (Aurora 930 or AScamera)
+    # Real specs: 640x480, but using 160x120 for memory efficiency
+    # NOTE: Requires --enable_cameras flag when launching
+    camera = CameraCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/base_link/camera",
+        update_period=0.2,  # 5 Hz (reduced from 10 Hz)
+        height=120,
+        width=160,
+        data_types=["rgb", "distance_to_image_plane"],
+        spawn=sim_utils.PinholeCameraCfg(
+            focal_length=24.0,
+            focus_distance=400.0,
+            horizontal_aperture=20.955,
+            clipping_range=(0.1, 10.0),
+        ),
+        offset=CameraCfg.OffsetCfg(
+            pos=(0.057, 0.0, 0.092),  # Real position from URDF relative to base_link
+            rot=(1.0, 0.0, 0.0, 0.0),
+            convention="ros",  # ROS convention: x-forward, y-left, z-up
+        ),
+    )
+
+    # LiDAR (MS200/LD19/A1 - 2D planar scan, 360°, 12m range)
+    # Real position: (0.011, 0.0, 0.136) from base_link
+    # NOTE: Temporarily disabled - mesh_prim_paths issue with ground plane
+    # TODO: Create proper mesh obstacle for LiDAR scanning
+    # lidar = RayCasterCfg(
+    #     prim_path="{ENV_REGEX_NS}/Robot/lidar_frame",
+    #     update_period=0.1,  # 10 Hz
+    #     offset=RayCasterCfg.OffsetCfg(
+    #         pos=(0.0, 0.0, 0.0),  # Position already defined in URDF relative to base_link
+    #     ),
+    #     pattern_cfg=patterns.LidarPatternCfg(
+    #         channels=1,
+    #         vertical_fov_range=(0.0, 0.0),  # 2D scan
+    #         horizontal_fov_range=(0.0, 360.0),  # Full 360°
+    #         horizontal_res=1.0,  # 1° resolution = 360 points
+    #     ),
+    #     max_distance=12.0,  # MS200: 12m range
+    #     drift_range=(0.0, 0.0),
+    #     debug_vis=False,
+    #     mesh_prim_paths=["/World/ground"],  # RayCaster only supports one mesh
+    # )
+
+    # Contact sensor for collision detection
+    contact_sensor = ContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/base_link",
+        update_period=0.0,
+        history_length=2,
+        track_air_time=True,
+    )
+
+    # Static obstacle for testing
+    obstacle = AssetBaseCfg(
+        prim_path="/World/envs/env_.*/Obstacle",
+        spawn=sim_utils.CuboidCfg(
+            size=(0.3, 0.3, 0.5),
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=True),
+            mass_props=sim_utils.MassPropertiesCfg(mass=100.0),
+            collision_props=sim_utils.CollisionPropertiesCfg(),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.8, 0.1, 0.1)),
+        ),
+        init_state=AssetBaseCfg.InitialStateCfg(pos=(2.0, 0.0, 0.25)),
+    )
+
+    # Lighting
+    light = AssetBaseCfg(
+        prim_path="/World/light",
+        spawn=sim_utils.DomeLightCfg(color=(0.75, 0.75, 0.75), intensity=2500.0),
+    )
+
+
+##
+# MDP Settings (Observations, Actions, Rewards, Terminations)
+##
+
+@configclass
+class ActionsCfg:
+    """Action specifications for ROSOrin robot."""
+    
+    # Joint velocity commands for 4 wheels
+    joint_vel = mdp.JointVelocityActionCfg(
+        asset_name="robot",
+        joint_names=[".*wheel.*"],
+        scale=5.0,
+    )
+
+
+@configclass
+class ObservationsCfg:
+    """Observation specifications for ROSOrin robot."""
+
+    @configclass
+    class PolicyCfg(ObsGroup):
+        """Observations for policy group."""
+
+        # Robot proprioception
+        base_lin_vel = ObsTerm(func=mdp.base_lin_vel)
+        base_ang_vel = ObsTerm(func=mdp.base_ang_vel)
+        
+        # Joint states (wheel velocities)
+        joint_vel = ObsTerm(func=mdp.joint_vel_rel)
+        
+        # 目标点信息 (相对位置和距离)
+        goal_relative_position = ObsTerm(
+            func=lambda env: env.goal_positions[:, :2] - env.scene.articulations["robot"].data.root_pos_w[:, :2]
+            if hasattr(env, 'goal_positions') 
+            else torch.zeros(env.num_envs, 2, device=env.device)
+        )
+        
+        goal_distance = ObsTerm(
+            func=lambda env: torch.norm(
+                env.goal_positions[:, :2] - env.scene.articulations["robot"].data.root_pos_w[:, :2],
+                dim=-1, keepdim=True
+            ) if hasattr(env, 'goal_positions')
+            else torch.zeros(env.num_envs, 1, device=env.device)
+        )
+        
+        # Camera RGB image (160x120x3) - flattened
+        # NOTE: Requires --enable_cameras flag
+        camera_rgb = ObsTerm(
+            func=lambda env: env.scene.sensors["camera"].data.output["rgb"].reshape(env.num_envs, -1),
+            noise=GaussianNoiseCfg(mean=0.0, std=0.01),
+        )
+        
+        # Camera depth image (160x120) - flattened  
+        camera_depth = ObsTerm(
+            func=lambda env: env.scene.sensors["camera"].data.output["distance_to_image_plane"].reshape(env.num_envs, -1),
+            noise=GaussianNoiseCfg(mean=0.0, std=0.02),
+        )
+        
+        # LiDAR scan (downsampled) - DISABLED (mesh path issue)
+        # lidar_scan = ObsTerm(
+        #     func=lambda env: env.scene.sensors["lidar"].data.ray_hits_w[::10, :],
+        #     noise=sim_utils.GaussianNoiseCfg(mean=0.0, std=0.05),
+        # )
+        
+        def __post_init__(self):
+            self.enable_corruption = False
+            self.concatenate_terms = True
+
+    # Define observation groups
+    policy: PolicyCfg = PolicyCfg()
+
+
+@configclass
+class RewardsCfg:
+    """
+    完整的奖励函数体系 for ROSOrin导航任务
+    
+    设计原则:
+    1. 主要奖励: 导航进度 + 目标到达
+    2. 辅助奖励: 速度控制 + 朝向对齐
+    3. 惩罚项: 动作突变 + 姿态不稳 + 高度异常
+    """
+    
+    # ========== 主要奖励 (Main Rewards) ==========
+    # 向目标前进的进度奖励 (最重要)
+    progress = RewTerm(
+        func=rosorin_mdp.progress_reward,
+        weight=10.0,  # 高权重，鼓励向目标前进
+       
+    终止条件配置
+    
+    Episode终止情况:
+    1. 成功到达目标点
+    2. 机器人倾覆
+    3. 超时
+    """
+    
+    # 成功到达目标 (SUCCESS)
+    goal_reached = DoneTerm(
+        func=rosorin_mdp.goal_reached_termination,
+        params={"distance_threshold": 0.5}
+    )
+    
+    # 机器人倾覆 (FAILURE)
+    robot_fallen = DoneTerm(
+        func=rosorin_mdp.robot_fallen_termination,
+        params={
+            "roll_threshold": 0.5,   # 约28.6度
+            "pitch_threshold": 0.5
+        }
+    )
+    
+    # 超时 (TIMEOUT)
+    # 到达目标点的大额奖励
+    goal_reached = RewTerm(
+        func=rosorin_mdp.goal_reached_reward,
+        weight=100.0,  # 成功到达给予巨大奖励
+        params={"distance_threshold": 0.5}  # 0.5米内算到达
+    )
+    
+    # ========== 辅助奖励 (Auxiliary Rewards) ==========
+    # 速度跟踪奖励 (保持合适速度)
+    velocity_tracking = RewTerm(
+        func=rosorin_mdp.velocity_tracking_reward,
+        weight=1.0,
+        params={"target_vel": 0.3}  # 目标速度0.3m/s
+    )
+    
+    # 朝向对齐奖励 (朝向目标点)
+    orientation = RewTerm(
+        func=rosorin_mdp.orientation_alignment_reward,
+        weight=2.0
+    )
+    
+    # 基础存活奖励 (保持运行)
+    alive = RewTerm(
+        func=mdp.is_alive,
+        weight=0.1
+    )
+    
+    # ========== 惩罚项 (Penalties) ==========
+    # 动作平滑惩罚 (避免抖动)
+    action_smoothness = RewTerm(
+        func=rosorin_mdp.smooth_action_penalty,
+        weight=0.5  # 轻度惩罚
+    )
+    
+    # 姿态稳定惩罚 (避免倾覆)
+    stability = RewTerm(
+        func=rosorin_mdp.stability_penalty,
+        weight=5.0,  # 中等惩罚
+        params={
+            "roll_threshold": 0.2,   # 允许±11.5度roll
+            "pitch_threshold": 0.2   # 允许±11.5度pitch
+        }
+    )
+    
+    环境随机化配置
+    
+    每次reset时:
+    1. 随机化机器人起始位置和朝向
+    2. 随机生成新的目标点
+    """
+    
+    # 随机化机器人起始位置
+    reset_robot_position = EventTerm(
+        func=rosorin_mdp.reset_robot_to_random_position,
+        mode="reset",
+        params={
+            "x_range": (-3.0, 3.0),      # ±3米范围
+            "y_range": (-3.0, 3.0),
+            "yaw_range": (-3.14, 3.14)   # 任意朝向
+        }
+    )
+    
+    # 随机生成目标点位置
+    reset_goal_position = EventTerm(
+        func=rosorin_mdp.reset_goal_position,
+        mode="reset",
+        params={
+            "min_distance": 3.0,  # 至少3米远
+            "max_distance": 8.0   # 最多8米远
+        }
+    )lass
+class TerminationsCfg:
+    """Termination terms for ROSOrin driving task."""
+
+    # Timeout
+    time_out = DoneTerm(func=mdp.time_out, time_out=True)
+
+
+@configclass
+class EventCfg:
+    """Configuration for randomization events."""
+
+    # Reset robot joints (disabled - no movable joints)
+    # reset_robot = EventTerm(
+    #     func=mdp.reset_joints_by_offset,
+    #     mode="reset",
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot"),
+    #         "position_range": (-0.1, 0.1),
+    #         "velocity_range": (0.0, 0.0),
+    #     },
+    # )
+    pass
+
+
+##
+# Environment Configuration
+##
+
+@configclass
+class ROSOrinEnvCfg(ManagerBasedRLEnvCfg):
+    """Configuration for ROSOrin driving RL environment."""
+
+    # Scene settings
+    scene: ROSOrinSceneCfg = ROSOrinSceneCfg(num_envs=4, env_spacing=5.0)
+    
+    # Basic settings
+    observations: ObservationsCfg = ObservationsCfg()
+    actions: ActionsCfg = ActionsCfg()
+    rewards: RewardsCfg = RewardsCfg()
+    terminations: TerminationsCfg = TerminationsCfg()
+    events: EventCfg = EventCfg()
+
+    def __post_init__(self):
+        """Post initialization."""
+        # Simulation settings
+        self.decimation = 2  # 50Hz control @ 100Hz physics
+        self.episode_length_s = 30.0  # 30 second episodes
+        
+        # Simulation settings
+        self.sim.dt = 0.01  # 100Hz physics

@@ -1,0 +1,183 @@
+# ==============================================
+# Diffusion Policy Model Configuration
+# ==============================================
+
+model:
+  name: "DiffusionPolicy"
+  
+  # Architecture Type
+  architecture: "unet1d"  # unet1d, transformer, mlp
+  
+  # Observation Encoder
+  encoder:
+    # Vision Encoder (for RGB/Depth images)
+    vision:
+      type: "resnet"  # resnet, efficientnet, vit
+      backbone: "resnet18"
+      pretrained: true
+      freeze_backbone: false
+      
+      # Input configuration
+      input_channels: 4  # RGB (3) + Depth (1)
+      image_size: [240, 320]
+      
+      # Output
+      feature_dim: 512
+      
+      # Augmentation (during training)
+      augmentation:
+        random_crop: true
+        crop_size: [224, 224]
+        color_jitter: true
+        random_erasing: false
+    
+    # LiDAR Encoder
+    lidar:
+      type: "pointnet"  # pointnet, pointnet++, voxel
+      input_dim: 3  # x, y, z (or x, y, intensity)
+      num_points: 360
+      
+      # PointNet architecture
+      mlp_layers: [64, 128, 256]
+      global_feature_dim: 256
+      
+      # Preprocessing
+      normalize: true
+      augmentation:
+        random_rotation: true
+        random_scale: [0.95, 1.05]
+        random_jitter: 0.01
+    
+    # Fusion Module
+    fusion:
+      type: "concat"  # concat, cross_attention, film
+      
+      # If using attention
+      attention:
+        num_heads: 8
+        hidden_dim: 512
+      
+      # Output dimension after fusion
+      fused_dim: 1024
+    
+    # Proprioceptive State Encoder
+    proprio:
+      input_dim: 12  # vel(3) + angular_vel(3) + orientation(4) + goal(2)
+      hidden_dims: [128, 256]
+      output_dim: 256
+      activation: "relu"
+      use_layer_norm: true
+  
+  # Diffusion Model Configuration
+  diffusion:
+    # Action space
+    action_dim: 3  # [linear_x, linear_y, angular_z]
+    action_horizon: 8  # Predict next 8 time steps
+    observation_horizon: 2  # Condition on last 2 observations
+    
+    # Diffusion process
+    num_diffusion_steps: 20  # T (fewer steps = faster inference)
+    beta_schedule: "squaredcos_cap_v2"  # linear, cosine, squaredcos_cap_v2
+    
+    # Beta schedule parameters
+    beta_start: 0.0001
+    beta_end: 0.02
+    
+    # Denoising Network (U-Net 1D)
+    denoiser:
+      type: "unet1d"
+      
+      # Architecture
+      down_dims: [256, 512, 1024]  # Downsampling channels
+      up_dims: [1024, 512, 256]    # Upsampling channels
+      kernel_size: 5
+      num_groups: 8  # For GroupNorm
+      
+      # Time embedding
+      time_embedding_dim: 128
+      time_embedding_type: "positional"  # positional, fourier
+      
+      # Conditioning
+      condition_dim: 1024  # From observation encoder
+      condition_method: "film"  # film, concat, cross_attention
+      
+      # Attention layers
+      use_attention: true
+      attention_heads: 8
+      attention_dim: 512
+    
+    # Loss function
+    loss:
+      type: "mse"  # mse, l1, huber
+      huber_delta: 0.1  # If using huber loss
+      
+      # Noise prediction vs x0 prediction
+      prediction_type: "noise"  # noise, x0, v_prediction
+    
+    # Sampling
+    sampling:
+      method: "ddpm"  # ddpm, ddim, dpm_solver
+      
+      # DDIM parameters (for faster sampling)
+      ddim:
+        num_inference_steps: 10  # Use fewer steps than training
+        eta: 0.0  # 0 = deterministic, 1 = stochastic
+      
+      # Classifier-free guidance (optional)
+      guidance_scale: 0.0  # 0 = no guidance, >1 = stronger guidance
+      
+      # Action clipping
+      clip_actions: true
+      action_min: [-1.0, -0.5, -2.0]
+      action_max: [1.0, 0.5, 2.0]
+  
+  # Training Configuration
+  training:
+    # Optimizer
+    optimizer: "adamw"
+    learning_rate: 1.0e-4
+    weight_decay: 1.0e-5
+    
+    # Learning rate schedule
+    lr_scheduler: "cosine"  # constant, linear, cosine, polynomial
+    lr_warmup_steps: 1000
+    lr_decay_steps: 100000
+    
+    # Gradient clipping
+    gradient_clip_val: 1.0
+    gradient_clip_algorithm: "norm"
+    
+    # Batch size
+    batch_size: 256
+    num_workers: 8
+    
+    # EMA (Exponential Moving Average)
+    use_ema: true
+    ema_decay: 0.999
+    
+    # Mixed precision
+    use_amp: true  # Automatic Mixed Precision
+    
+  # Checkpointing
+  checkpoint:
+    save_top_k: 3
+    monitor: "val/loss"
+    mode: "min"
+    save_last: true
+    save_interval: 1000  # Save every N steps
+
+# For compatibility with different action spaces
+action_normalization:
+  enabled: true
+  method: "min_max"  # min_max, standard
+  
+# Inference optimization
+inference:
+  # Compile model for faster inference
+  compile_model: false  # torch.compile (PyTorch 2.0+)
+  
+  # Batch inference
+  batch_size: 1
+  
+  # Execution mode
+  execution_mode: "async"  # sync, async (for real-time control)

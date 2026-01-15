@@ -1,0 +1,96 @@
+# SAC-Diffusion微调配置
+# 基于BC预训练模型进行强化学习微调
+
+# 实验设置
+experiment_name: sac_diffusion_rosorin
+output_dir: experiments/sac_training
+seed: 42
+device: cuda
+render: false
+
+# 环境配置
+num_envs: 16  # 并行环境数量（根据GPU内存调整）
+max_episode_steps: 500
+
+# 预训练模型
+pretrained_model: experiments/bc_training/bc_training_20251228_052241/best_model.pt
+load_pretrained: true
+
+# 模型配置
+model:
+  diffusion:
+    action_dim: 4
+    action_horizon: 8  # 预测8步动作序列
+    num_diffusion_steps: 100
+    denoiser:
+      down_dims: [256, 512, 1024]
+      kernel_size: 5
+      num_groups: 8
+  
+  encoder:
+    vision:
+      type: cnn  # cnn or vit
+      hidden_dims: [64, 128, 256]
+    lidar:
+      type: pointnet
+      hidden_dims: [128, 256]
+    proprio:
+      dim: 10
+    fusion:
+      type: attention  # attention or concat
+      output_dim: 1024
+
+# SAC智能体配置
+agent:
+  training:
+    total_steps: 1000000  # 总训练步数
+    buffer_size: 1000000  # 经验回放池大小
+    batch_size: 256
+    gamma: 0.99  # 折扣因子
+    updates_per_step: 1
+    warmup_steps: 10000  # BC预训练跳过warmup
+    gradient_steps: 1
+    
+  actor:
+    learning_rate: 3.0e-4
+    update_frequency: 1
+    
+  critic:
+    learning_rate: 3.0e-4
+    tau: 0.005  # 软更新系数
+    target_update_frequency: 1
+    architecture:
+      q_head:
+        hidden_dims: [512, 512, 256]
+  
+  entropy:
+    initial_alpha: 0.2
+    auto_tune: true
+    target_entropy: -4.0  # -action_dim
+    alpha_lr: 3.0e-4
+  
+  checkpoint:
+    keep_checkpoints: 5
+    save_frequency: 10000  # 每10k步保存一次
+
+# 日志配置
+logging:
+  tensorboard:
+    enabled: true
+    log_dir: experiments/sac_training/tensorboard
+  
+  wandb:
+    enabled: false  # 如需要可启用
+    project: sac-diffusion-driving
+    entity: null
+    
+  log_frequency: 100  # 每100步记录一次
+  eval_frequency: 5000  # 每5k步评估一次
+  save_video: true
+  video_frequency: 10000
+
+# 评估配置
+evaluation:
+  num_episodes: 20
+  deterministic: true
+  render: false

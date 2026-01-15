@@ -1,0 +1,47 @@
+name: sac-diffusion-driving
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+
+dependencies:
+  # Python
+  - python=3.10
+
+  # CUDA & PyTorch (adjust based on your GPU)
+  - pytorch::pytorch=2.1.0
+  - pytorch::torchvision=0.16.0
+  - pytorch::pytorch-cuda=12.1
+  
+  # Core Scientific Computing
+  - numpy=1.24.*
+  - scipy=1.10.*
+  - pandas=2.0.*
+  
+  # Visualization
+  - matplotlib=3.7.*
+  - seaborn=0.12.*
+  
+  # Utilities
+  - pip
+  - git
+  - gcc_linux-64
+  - gxx_linux-64
+  
+  # Jupyter
+  - jupyter
+  - ipykernel
+  
+  # pip dependencies
+  - pip:
+      - -r requirements.txt
+      
+      # Isaac Lab (install separately following NVIDIA docs)
+      # Install after conda environment is set up:
+      # git clone https://github.com/isaac-sim/IsaacLab.git
+      # cd IsaacLab && ./isaaclab.sh --install
+      
+      # ROS2 packages (if needed for real robot)
+      # These should be installed via apt on Ubuntu:
+      # sudo apt install ros-humble-desktop
