@@ -10,6 +10,7 @@
 本项目探索前沿的自动驾驶范式：在NVIDIA Isaac Lab高保真仿真环境中，训练一个以去噪扩散概率模型（DDPM）为核心、并采用软演员-批评家（SAC）算法优化的端到端驾驶策略。
 
 **核心创新点：**
+
 - 🎯 将扩散模型的去噪过程作为SAC的随机策略
 - 🌈 最大熵强化学习实现多模态动作分布学习
 - 🚀 Isaac Lab GPU加速并行仿真训练 (8-64 parallel envs)
@@ -36,6 +37,7 @@
 ## 🆕 v2.0 重构更新（2025-12-30）
 
 ### 主要改进
+
 - ✅ **奖励配置分离**: 每个算法独立的奖励权重配置（`configs/rewards/`）
 - ✅ **脚本分类重组**: 按功能分类到training/evaluation/testing等目录
 - ✅ **环境配置工厂**: 通过工厂函数自动加载算法专用配置
@@ -49,16 +51,17 @@
 
 ### 模块完成度
 
-| 模块 | 完成度 | 状态 |
-|-----|--------|------|
-| 核心算法 (Diffusion + SAC) | 95% | 🟢 已完成 |
-| 观测编码器 (Vision/LiDAR/Fusion) | 100% | 🟢 已完成 |
-| 数据处理 (Buffer/Dataset) | 100% | 🟢 已完成 |
-| 仿真环境 (Isaac Lab) | 60% | 🟡 待完善 |
-| 训练脚本 | 90% | 🟢 基本完成 |
-| Sim2Real部署 | 100% | 🟢 已完成 |
-| 基线算法 | 100% | 🟢 已完成 |
-| 配置文件 | 70% | 🟡 部分完成 |
+
+| 模块                             | 完成度 | 状态        |
+| -------------------------------- | ------ | ----------- |
+| 核心算法 (Diffusion + SAC)       | 95%    | 🟢 已完成   |
+| 观测编码器 (Vision/LiDAR/Fusion) | 100%   | 🟢 已完成   |
+| 数据处理 (Buffer/Dataset)        | 100%   | 🟢 已完成   |
+| 仿真环境 (Isaac Lab)             | 60%    | 🟡 待完善   |
+| 训练脚本                         | 90%    | 🟢 基本完成 |
+| Sim2Real部署                     | 100%   | 🟢 已完成   |
+| 基线算法                         | 100%   | 🟢 已完成   |
+| 配置文件                         | 70%    | 🟡 部分完成 |
 
 **代码统计**: 38个Python文件 | 8,658行代码 | 100%通过语法检查
 
@@ -134,13 +137,14 @@
 ```
 
 **重点目录说明**：
+
 - `configs/rewards/` - 每个算法独立的奖励配置（v2.0新增）
 - `scripts/training/` - 所有训练脚本按功能分类（v2.0重组）
 - `docs/` - 完整的技术文档（v2.0整理）
 
 ---
 
-##  快速开始
+## 快速开始
 
 详细步骤请参考 **[快速开始文档](docs/quickstart.md)** 和 **[训练工作流](docs/training_workflow.md)**
 
@@ -208,14 +212,15 @@ pip install -e .
 
 本项目实现了6种baseline算法用于对比。详见 **[基线算法文档](docs/baselines.md)**
 
-| 算法 | 类型 | 策略 | 奖励配置 | 特点 |
-|------|------|------|---------|------|
-| **BC** | 模仿学习 | 确定性 | [bc_rewards.py](configs/rewards/bc_rewards.py) | 直接学习专家 |
-| **PPO** | On-policy RL | 高斯 | [ppo_rewards.py](configs/rewards/ppo_rewards.py) | 高密集奖励 |
-| **SAC** | Off-policy RL | 高斯 | [sac_rewards.py](configs/rewards/sac_rewards.py) | 最大熵 |
-| **TD3** | Off-policy RL | 确定性 | [td3_rewards.py](configs/rewards/td3_rewards.py) | 双Q网络 |
-| **DAgger** | 模仿学习 | 确定性 | [dagger_rewards.py](configs/rewards/dagger_rewards.py) | 迭代聚合 |
-| **SAC-Diffusion** | Off-policy RL | 扩散 | [sac_rewards.py](configs/rewards/sac_rewards.py) | 多模态 |
+
+| 算法              | 类型          | 策略   | 奖励配置                                               | 特点         |
+| ----------------- | ------------- | ------ | ------------------------------------------------------ | ------------ |
+| **BC**            | 模仿学习      | 确定性 | [bc_rewards.py](configs/rewards/bc_rewards.py)         | 直接学习专家 |
+| **PPO**           | On-policy RL  | 高斯   | [ppo_rewards.py](configs/rewards/ppo_rewards.py)       | 高密集奖励   |
+| **SAC**           | Off-policy RL | 高斯   | [sac_rewards.py](configs/rewards/sac_rewards.py)       | 最大熵       |
+| **TD3**           | Off-policy RL | 确定性 | [td3_rewards.py](configs/rewards/td3_rewards.py)       | 双Q网络      |
+| **DAgger**        | 模仿学习      | 确定性 | [dagger_rewards.py](configs/rewards/dagger_rewards.py) | 迭代聚合     |
+| **SAC-Diffusion** | Off-policy RL | 扩散   | [sac_rewards.py](configs/rewards/sac_rewards.py)       | 多模态       |
 
 **v2.0新特性**: 每个算法现在有独立的奖励权重配置，可单独优化！
 
@@ -233,6 +238,7 @@ pip install -e .
 ```
 
 **优势**：
+
 1. 多模态动作分布（处理多种可行策略）
 2. 平滑的策略梯度（扩散过程天然正则化）
 3. 更好的探索能力（熵正则化+去噪随机性）
@@ -242,12 +248,14 @@ pip install -e .
 ## 🔬 实验设置
 
 ### 仿真环境
+
 - **平台**: NVIDIA Isaac Lab 4.0
 - **场景**: 6房间室内导航（10m×10m）
 - **传感器**: RGB相机(240×80) + 深度相机(160×120)
 - **机器人**: ROSOrin麦克纳姆轮小车
 
 ### 训练配置
+
 - **并行环境**: 8个
 - **总训练步数**: 100K-200K
 - **批次大小**: 256-512
@@ -260,11 +268,13 @@ pip install -e .
 ## 🎯 v2.0 重构说明（2025-12-30）
 
 ### 重构前的问题
+
 - ❌ 所有算法共用一个奖励配置，无法独立优化
 - ❌ 所有脚本混在scripts/根目录，难以维护
 - ❌ MDP函数位置不清晰
 
 ### 重构后的改进
+
 - ✅ 每个算法独立的奖励配置文件（`configs/rewards/`）
 - ✅ 脚本按功能分类到子目录（training/evaluation/testing等）
 - ✅ MDP函数集中管理（`configs/mdp/`）
@@ -274,11 +284,13 @@ pip install -e .
 ### 命令变更示例
 
 **旧命令** (v1.0):
+
 ```bash
 ./isaaclab_runner.sh scripts/train_ppo.py --num_envs 8
 ```
 
 **新命令** (v2.0):
+
 ```bash
 ./isaaclab_runner.sh scripts/training/train_ppo.py --num_envs 8
 ```
@@ -337,32 +349,34 @@ python scripts/deploy_to_robot.py \
 **目标：** 在Isaac Lab中验证算法有效性
 
 1. **Baseline对比**
-   - [ ] MPC（专家策略）
-   - [ ] 标准Diffusion Policy
-   - [ ] TD3
-   - [ ] SAC-Gaussian Policy
-   - [ ] **SAC-Diffusion Policy（本文方法）**
 
+   - [ ]  MPC（专家策略）
+   - [ ]  标准Diffusion Policy
+   - [ ]  TD3
+   - [ ]  SAC-Gaussian Policy
+   - [ ]  **SAC-Diffusion Policy（本文方法）**
 2. **消融实验**
-   - [ ] 扩散步数的影响（5, 10, 20, 50步）
-   - [ ] SAC vs PPO vs TD3（哪个RL算法更适合）
-   - [ ] 熵权重的影响
-   - [ ] 预训练的必要性
 
+   - [ ]  扩散步数的影响（5, 10, 20, 50步）
+   - [ ]  SAC vs PPO vs TD3（哪个RL算法更适合）
+   - [ ]  熵权重的影响
+   - [ ]  预训练的必要性
 3. **泛化性测试**
-   - [ ] 不同场景（城市、高速、停车场）
-   - [ ] 不同天气（晴天、雨天、夜晚）
-   - [ ] 动态障碍物密度
+
+   - [ ]  不同场景（城市、高速、停车场）
+   - [ ]  不同天气（晴天、雨天、夜晚）
+   - [ ]  动态障碍物密度
 
 ### Phase 2: Sim2Real迁移
 
 **目标：** 将策略迁移到真实ROSOrin小车
 
 1. **域随机化强化**
+
    - 传感器噪声、延迟模拟
    - 动力学参数随机化
-
 2. **真实世界微调**
+
    - 在真实小车上收集少量数据
    - 在线微调策略
 
@@ -379,6 +393,7 @@ J(\pi_\theta) = \mathbb{E}_{\tau \sim \pi_\theta} \left[ \sum_{t=0}^T \gamma^t \
 $$
 
 其中：
+
 - $\pi_\theta(a|s)$ 是扩散策略，通过去噪过程 $p_\theta(a_0 | a_T, s)$ 定义
 - $H(\pi_\theta)$ 是策略熵，鼓励探索
 - $\alpha$ 是自动调节的温度参数
@@ -397,13 +412,14 @@ $$
 
 ## 📈 预期结果
 
-| 指标 | MPC | Diffusion Policy | TD3 | **SAC-Diffusion** |
-|------|-----|------------------|-----|-------------------|
-| 任务成功率 | 85% | 78% | 82% | **92%** |
-| 平均奖励 | 120 | 105 | 115 | **135** |
-| 碰撞率 | 5% | 8% | 6% | **3%** |
-| 动作平滑度 | 0.85 | 0.92 | 0.78 | **0.95** |
-| 泛化性（新场景） | 72% | 65% | 70% | **80%** |
+
+| 指标             | MPC  | Diffusion Policy | TD3  | **SAC-Diffusion** |
+| ---------------- | ---- | ---------------- | ---- | ----------------- |
+| 任务成功率       | 85%  | 78%              | 82%  | **92%**           |
+| 平均奖励         | 120  | 105              | 115  | **135**           |
+| 碰撞率           | 5%   | 8%               | 6%   | **3%**            |
+| 动作平滑度       | 0.85 | 0.92             | 0.78 | **0.95**          |
+| 泛化性（新场景） | 72%  | 65%              | 70%  | **80%**           |
 
 ---
 
@@ -464,9 +480,8 @@ $$
 
 ## 📞 联系方式
 
-- **邮箱：** [你的邮箱]
-- **GitHub：** [你的GitHub]
-- **项目页面：** [待发布]
+- **邮箱：** u3661739@connect.hku.hk
+- **GitHub：**WUJIAHAO-HKU
 
 ---
 
